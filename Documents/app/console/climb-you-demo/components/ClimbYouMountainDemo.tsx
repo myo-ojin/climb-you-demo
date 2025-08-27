@@ -20,7 +20,12 @@ export default function MountainProgress({
   onProgressChange,
   checkpoints = [0.2, 0.45, 0.7, 1],
 }: Props) {
+  const [isMounted, setIsMounted] = useState(false);
   const prefersReducedMotion = useReducedMotion();
+  
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Controlled or Uncontrolled
   const [progressState, setProgressState] = useState(0);
@@ -33,39 +38,162 @@ export default function MountainProgress({
   const [len, setLen] = useState(0);
   const [pose, setPose] = useState({ x: 0, y: 0, angle: 0 });
 
+  // ズーム機能用の状態管理
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomCenter, setZoomCenter] = useState({ x: 400, y: 300 });
+  const [lastProgress, setLastProgress] = useState(0);
+  // アニメーション状態（完全分離）
+  const [animationState, setAnimationState] = useState<'idle' | 'zooming-in' | 'moving' | 'zooming-out'>('idle');
+
   useEffect(() => {
     const p = pathRef.current;
     if (p) setTotal(p.getTotalLength());
   }, []);
 
-  // 進捗→位置
+  // 進捗変化を検知（ズームトリガー用）
+  useEffect(() => {
+    if (progress > lastProgress && progress - lastProgress >= 0.05) {
+      console.log('🔍 ズーム条件達成:', {
+        前回: (lastProgress * 100).toFixed(0) + '%',
+        現在: (progress * 100).toFixed(0) + '%',
+        差分: ((progress - lastProgress) * 100).toFixed(0) + '%',
+        ハイカー位置: { x: pose.x, y: pose.y }
+      });
+      
+      // 新しい進捗位置を事前計算してズーム中心を正確に設定
+      const path = pathRef.current;
+      if (path) {
+        const target = progress * total;
+        const futurePoint = path.getPointAtLength(target);
+        
+        // 境界条件を考慮した角度計算
+        let futurePoint2;
+        let futureAngle;
+        
+        if (target < 3) {
+          // 開始点近く：少し先の点を使用
+          futurePoint2 = path.getPointAtLength(Math.min(total, 5));
+          futureAngle = (Math.atan2(futurePoint2.y - futurePoint.y, futurePoint2.x - futurePoint.x) * 180) / Math.PI;
+        } else if (target > total - 3) {
+          // 終点近く：少し前の点を使用
+          const prevPoint = path.getPointAtLength(Math.max(0, target - 5));
+          futureAngle = (Math.atan2(futurePoint.y - prevPoint.y, futurePoint.x - prevPoint.x) * 180) / Math.PI;
+        } else {
+          // 通常：前方の点を使用
+          futurePoint2 = path.getPointAtLength(Math.min(total, target + 2.0));
+          futureAngle = (Math.atan2(futurePoint2.y - futurePoint.y, futurePoint2.x - futurePoint.x) * 180) / Math.PI;
+        }
+        
+        // 角度に応じて足元位置を動的計算
+        const angleRad = (futureAngle * Math.PI) / 180;
+        const footOffsetX = -Math.cos(angleRad + Math.PI/2) * 8; // 進行方向に対して垂直左向き
+        const footOffsetY = -Math.sin(angleRad + Math.PI/2) * 8 + 25; // 下向き成分も追加
+        
+        setZoomCenter({ 
+          x: futurePoint.x + footOffsetX, 
+          y: futurePoint.y + footOffsetY 
+        });
+      }
+      
+      // ステップ1: ズームイン開始
+      setAnimationState('zooming-in');
+      console.log('🎬 ステップ1: ズームイン開始');
+      
+      animate(zoomLevel, 3, {
+        duration: 0.7 / 0.75, // 0.75倍速、0.1秒短縮 = 0.93秒
+        ease: [0.2, 0, 0.3, 1],
+        onUpdate: setZoomLevel,
+        onComplete: () => {
+          // 0.2秒の小休止後に移動許可
+          setTimeout(() => {
+            console.log('🎬 ステップ2: 移動許可（0.2秒遅延後）');
+            setAnimationState('moving');
+          }, 200);
+          
+          // 移動完了を待つ（0.2秒の遅延を考慮）
+          setTimeout(() => {
+            // ステップ3: ズームアウト開始
+            console.log('🎬 ステップ3: ズームアウト開始');
+            setAnimationState('zooming-out');
+            
+            animate(zoomLevel, 1, {
+              duration: 1.1 / 0.75, // 0.75倍速、0.1秒短縮 = 1.47秒
+              ease: [0.4, 0, 0.2, 1],
+              onUpdate: setZoomLevel,
+              onComplete: () => {
+                console.log('🎬 完了: 通常状態に戻る');
+                setAnimationState('idle');
+              }
+            });
+          }, 1000 / 0.75 + 200); // 移動時間1.33秒 + 0.2秒遅延 = 1.53秒後
+        }
+      });
+    }
+    setLastProgress(progress);
+  }, [progress, lastProgress, pose.x, pose.y]);
+
+  // 進捗→位置（完全分離制御）
   useEffect(() => {
     const path = pathRef.current;
     if (!path) return;
+    
+    // 移動が許可されている時のみ実行（'idle'時は常に移動可能、'moving'時のみズーム中の移動許可）
+    if (animationState !== 'moving' && animationState !== 'idle') {
+      console.log(`⏸️ 移動停止中 (状態: ${animationState})`);
+      return;
+    }
+    
     const target = progress * total;
 
-    if (prefersReducedMotion) {
+    if (!isMounted || prefersReducedMotion) {
       const pt = path.getPointAtLength(target);
-      const pt2 = path.getPointAtLength(Math.min(total, target + 0.5));
-      const angle = (Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * 180) / Math.PI;
+      
+      // 境界条件を考慮した角度計算
+      let angle;
+      if (target < 3) {
+        const pt2 = path.getPointAtLength(Math.min(total, 5));
+        angle = (Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * 180) / Math.PI;
+      } else if (target > total - 3) {
+        const prevPt = path.getPointAtLength(Math.max(0, target - 5));
+        angle = (Math.atan2(pt.y - prevPt.y, pt.x - prevPt.x) * 180) / Math.PI;
+      } else {
+        const pt2 = path.getPointAtLength(Math.min(total, target + 2.0));
+        angle = (Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * 180) / Math.PI;
+      }
+      
       setPose({ x: pt.x, y: pt.y, angle });
       setLen(target);
       return;
     }
 
     const ctrl = animate(len, target, {
-      duration: 0.9,
-      ease: [0.2, 0.6, 0.3, 1],
+      duration: 1.2 / 0.75, // より長めの時間で滑らかに = 1.6秒
+      ease: [0.15, 0.05, 0.15, 1], // さらに滑らかなイージング
       onUpdate: (L) => {
         const pt = path.getPointAtLength(L);
-        const pt2 = path.getPointAtLength(Math.min(total, L + 0.5));
-        const angle = (Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * 180) / Math.PI;
+        
+        // 境界条件を考慮した角度計算（ズーム中心計算と同じロジック）
+        let angle;
+        if (L < 3) {
+          // 開始点近く
+          const pt2 = path.getPointAtLength(Math.min(total, 5));
+          angle = (Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * 180) / Math.PI;
+        } else if (L > total - 3) {
+          // 終点近く
+          const prevPt = path.getPointAtLength(Math.max(0, L - 5));
+          angle = (Math.atan2(pt.y - prevPt.y, pt.x - prevPt.x) * 180) / Math.PI;
+        } else {
+          // 通常
+          const pt2 = path.getPointAtLength(Math.min(total, L + 2.0));
+          angle = (Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * 180) / Math.PI;
+        }
+        
         setPose({ x: pt.x, y: pt.y, angle });
         setLen(L);
       },
     });
     return () => ctrl.stop();
-  }, [progress, total, prefersReducedMotion]);
+  }, [progress, total, prefersReducedMotion, animationState]);
 
   // ダッシュ（通過部分のみ）
   const dash = useMemo(() => `${total} ${total}`, [total]);
@@ -107,8 +235,21 @@ export default function MountainProgress({
         <p className="opacity-80">山を前面にも配置して、ほんまに斜面を登ってる見た目に。</p>
       </div>
 
-      <div className="w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-slate-950">
-        <svg viewBox="0 0 800 600" className="block w-full h-auto">
+      <div 
+        className="w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-slate-950" 
+        style={isMounted ? { 
+          overflow: zoomLevel > 1 ? 'visible' : 'hidden' // ズーム時のみoverflow許可
+        } : {}}
+      >
+        <motion.svg 
+          viewBox="0 0 800 600" 
+          className="block w-full h-auto"
+          animate={isMounted ? {
+            scale: zoomLevel,
+            transformOrigin: `${zoomCenter.x}px ${zoomCenter.y}px`
+          } : {}}
+          transition={{ duration: 0.7 / 0.75, ease: [0.2, 0, 0.3, 1] }}
+        >
           {/* ====== defs ====== */}
           <defs>
             {/* 空 */}
@@ -129,27 +270,22 @@ export default function MountainProgress({
 
           {/* ====== 背景 ====== */}
           <rect width="800" height="600" fill="url(#sky)" />
-          {/* 星（ランダム配置） */}
-          {useMemo(() => 
-            [...Array(80)].map((_, i) => {
-              // シードを使った疑似ランダム生成（一貫性のため）
-              const seed = i * 12345;
-              const randomX = (seed * 9301 + 49297) % 800;
-              const randomY = (seed * 233280 + 851) % 280 + 10; // 上部280pxの範囲
-              return (
-                <motion.circle
-                  key={i}
-                  cx={randomX}
-                  cy={randomY}
-                  r={i % 4 === 0 ? 1.8 : i % 3 === 0 ? 1.4 : 1}
-                  fill="#cfe7ff"
-                  initial={{ opacity: 0.3 }}
-                  animate={{ opacity: [0.3, 0.85, 0.4] }}
-                  transition={{ repeat: Infinity, duration: 2 + (i % 5) * 0.45, delay: i * 0.04 }}
-                />
-              );
-            }), []
-          )}
+          {/* 星（静的配置でhydration問題を回避） */}
+          {[...Array(80)].map((_, i) => {
+            // 完全に決定論的な位置計算
+            const seedA = (i * 97 + 13) % 800;
+            const seedB = (i * 53 + 7) % 280 + 10;
+            return (
+              <circle
+                key={i}
+                cx={seedA}
+                cy={seedB}
+                r={i % 4 === 0 ? 1.8 : i % 3 === 0 ? 1.4 : 1}
+                fill="#cfe7ff"
+                opacity={0.6}
+              />
+            );
+          })}
           {/* 月（左上に配置、グロー効果なし） */}
           <circle cx="150" cy="80" r={35} fill="#ffe7aa" />
 
@@ -204,33 +340,6 @@ export default function MountainProgress({
           {cps.map((c) => (
             <g key={c.p} transform={`translate(${c.x}, ${c.y})`}>
               <circle r={3} fill="#ffffff" opacity="0.95" />
-              {reached.includes(c.p) && (
-                <>
-                  <motion.circle
-                    r={6}
-                    fill="none"
-                    stroke="#fff"
-                    strokeWidth={1}
-                    initial={{ scale: 0.6, opacity: 0.8 }}
-                    animate={{ scale: 1.8, opacity: 0 }}
-                    transition={{ duration: 0.9 }}
-                  />
-                  {[...Array(7)].map((_, i) => (
-                    <motion.line
-                      key={i}
-                      x1={0}
-                      y1={0}
-                      x2={Math.cos((i * Math.PI * 2) / 7) * 12}
-                      y2={Math.sin((i * Math.PI * 2) / 7) * 12}
-                      stroke="#ffe7aa"
-                      strokeWidth={1.6}
-                      initial={{ opacity: 0, scale: 0 }}
-                      animate={{ opacity: [0, 1, 0], scale: [0.2, 1, 1.1] }}
-                      transition={{ duration: 0.7, ease: 'easeOut' }}
-                    />
-                  ))}
-                </>
-              )}
             </g>
           ))}
 
@@ -238,7 +347,7 @@ export default function MountainProgress({
           <g transform={`translate(${pose.x}, ${pose.y}) rotate(${pose.angle})`} filter="url(#shadow)">
             <image href="/hiker.svg" width="60" height="72" x={-30} y={-60} preserveAspectRatio="xMidYMid meet" />
           </g>
-        </svg>
+        </motion.svg>
       </div>
 
       {/* デモ用UI（Uncontrolled の時だけ表示） */}

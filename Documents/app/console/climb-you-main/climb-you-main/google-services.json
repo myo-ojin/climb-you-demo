@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "930082383478",
+    "project_id": "climb-you",
+    "storage_bucket": "climb-you.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:930082383478:android:e2943e45db8225a798a157",
+        "android_client_info": {
+          "package_name": "com.climbYou.main"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5NYiLumrLCKly42S4GNmOyl2sfgw-AkA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppNavigator from './src/navigation/AppNavigator';
 import OnboardingNavigator from './src/navigation/OnboardingNavigator';
+import { firebaseConfig } from './src/services/firebase/config';
 
 const ONBOARDING_COMPLETED_KEY = 'onboarding_completed';
 
@@ -10,8 +11,21 @@ export default function App() {
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState<boolean | null>(null);
 
   useEffect(() => {
-    checkOnboardingStatus();
+    initializeApp();
   }, []);
+
+  const initializeApp = async () => {
+    try {
+      // Initialize Firebase
+      await firebaseConfig.initialize();
+      
+      // Check onboarding status
+      await checkOnboardingStatus();
+    } catch (error) {
+      console.error('Error initializing app:', error);
+      setIsOnboardingCompleted(false);
+    }
+  };
 
   // 本番用: AsyncStorage で判定
   // const checkOnboardingStatus = async () => {

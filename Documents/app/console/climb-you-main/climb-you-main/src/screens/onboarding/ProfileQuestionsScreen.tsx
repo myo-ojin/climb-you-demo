@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput, Alert } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
+import { openaiService, ProfileQuestion } from '../../services/ai/openaiService';
+import { firebaseConfig } from '../../services/firebase/config';
 
 type ProfileQuestionsScreenNavigationProp = StackNavigationProp<OnboardingStackParamList, 'ProfileQuestions'>;
 type ProfileQuestionsScreenRouteProp = RouteProp<OnboardingStackParamList, 'ProfileQuestions'>;

@@ -6,6 +6,7 @@ import { RootStackParamList } from '../types';
 import TasksScreen from '../screens/TasksScreen';
 import MainScreen from '../screens/MainScreen';
 import AddTaskScreen from '../screens/AddTaskScreen';
+import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator<RootStackParamList>();
 
@@ -97,7 +98,7 @@ export default function AppNavigator() {
         />
         <Tab.Screen 
           name="Profile" 
-          component={TasksScreen}
+          component={ProfileScreen}
           options={{
             tabBarLabel: 'Profile',
             tabBarIcon: ({ focused }) => (

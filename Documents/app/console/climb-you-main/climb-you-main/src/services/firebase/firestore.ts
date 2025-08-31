@@ -1,4 +1,19 @@
-import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { 
+  collection, 
+  doc, 
+  addDoc, 
+  getDoc, 
+  getDocs, 
+  updateDoc, 
+  setDoc, 
+  query, 
+  orderBy, 
+  limit, 
+  where, 
+  Timestamp,
+  DocumentData,
+  QueryDocumentSnapshot
+} from 'firebase/firestore';
 import { firebaseConfig } from './config';
 
 // Firestore collections
@@ -14,8 +29,8 @@ export const COLLECTIONS = {
 // User document interface
 export interface UserDocument {
   id: string;
-  createdAt: FirebaseFirestoreTypes.Timestamp;
-  updatedAt: FirebaseFirestoreTypes.Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
   isOnboardingCompleted: boolean;
   profile?: {
     name?: string;
@@ -33,7 +48,7 @@ export interface GoalDocument {
   category: string;
   timeframe: string;
   intensity: 'low' | 'medium' | 'high';
-  createdAt: FirebaseFirestoreTypes.Timestamp;
+  createdAt: Timestamp;
   isCompleted: boolean;
 }
 
@@ -48,30 +63,28 @@ export interface QuestDocument {
   difficulty: 'easy' | 'medium' | 'hard';
   estimatedTime: number; // in minutes
   isCompleted: boolean;
-  completedAt?: FirebaseFirestoreTypes.Timestamp;
-  createdAt: FirebaseFirestoreTypes.Timestamp;
+  completedAt?: Timestamp;
+  createdAt: Timestamp;
   generatedBy: 'ai' | 'template' | 'manual';
 }
 
 class FirestoreService {
-  private db: FirebaseFirestoreTypes.Module;
-
-  constructor() {
-    this.db = firebaseConfig.getFirestore();
+  private get db() {
+    return firebaseConfig.getFirestore();
   }
 
   // Generic methods
-  private getUserCollection(userId: string) {
-    return this.db.collection(COLLECTIONS.USERS).doc(userId);
+  private getUserDoc(userId: string) {
+    return doc(this.db, COLLECTIONS.USERS, userId);
   }
 
   private getUserSubCollection(userId: string, collectionName: string) {
-    return this.getUserCollection(userId).collection(collectionName);
+    return collection(this.db, COLLECTIONS.USERS, userId, collectionName);
   }
 
   // User methods
   async createUser(userId: string, data: Partial<UserDocument>): Promise<void> {
-    const timestamp = firestore.Timestamp.now();
+    const timestamp = Timestamp.now();
     const userData: Omit<UserDocument, 'id'> = {
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -79,28 +92,28 @@ class FirestoreService {
       ...data,
     };
 
-    await this.getUserCollection(userId).set(userData);
+    await setDoc(this.getUserDoc(userId), userData);
   }
 
   async getUser(userId: string): Promise<UserDocument | null> {
-    const doc = await this.getUserCollection(userId).get();
-    if (!doc.exists) {
+    const docSnap = await getDoc(this.getUserDoc(userId));
+    if (!docSnap.exists()) {
       return null;
     }
-    return { id: doc.id, ...doc.data() } as UserDocument;
+    return { id: docSnap.id, ...docSnap.data() } as UserDocument;
   }
 
   async updateUser(userId: string, data: Partial<UserDocument>): Promise<void> {
     const updateData = {
       ...data,
-      updatedAt: firestore.Timestamp.now(),
+      updatedAt: Timestamp.now(),
     };
-    await this.getUserCollection(userId).update(updateData);
+    await updateDoc(this.getUserDoc(userId), updateData);
   }
 
   // Goal methods
   async createGoal(userId: string, goalData: Omit<GoalDocument, 'id' | 'userId' | 'createdAt'>): Promise<string> {
-    const timestamp = firestore.Timestamp.now();
+    const timestamp = Timestamp.now();
     const goal: Omit<GoalDocument, 'id'> = {
       userId,
       createdAt: timestamp,
@@ -108,14 +121,16 @@ class FirestoreService {
       ...goalData,
     };
 
-    const docRef = await this.getUserSubCollection(userId, COLLECTIONS.GOALS).add(goal);
+    const docRef = await addDoc(this.getUserSubCollection(userId, COLLECTIONS.GOALS), goal);
     return docRef.id;
   }
 
   async getUserGoals(userId: string): Promise<GoalDocument[]> {
-    const snapshot = await this.getUserSubCollection(userId, COLLECTIONS.GOALS)
-      .orderBy('createdAt', 'desc')
-      .get();
+    const q = query(
+      this.getUserSubCollection(userId, COLLECTIONS.GOALS),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
 
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -125,7 +140,7 @@ class FirestoreService {
 
   // Quest methods
   async createQuest(userId: string, questData: Omit<QuestDocument, 'id' | 'userId' | 'createdAt'>): Promise<string> {
-    const timestamp = firestore.Timestamp.now();
+    const timestamp = Timestamp.now();
     const quest: Omit<QuestDocument, 'id'> = {
       userId,
       createdAt: timestamp,
@@ -133,15 +148,17 @@ class FirestoreService {
       ...questData,
     };
 
-    const docRef = await this.getUserSubCollection(userId, COLLECTIONS.QUESTS).add(quest);
+    const docRef = await addDoc(this.getUserSubCollection(userId, COLLECTIONS.QUESTS), quest);
     return docRef.id;
   }
 
-  async getUserQuests(userId: string, limit: number = 10): Promise<QuestDocument[]> {
-    const snapshot = await this.getUserSubCollection(userId, COLLECTIONS.QUESTS)
-      .orderBy('createdAt', 'desc')
-      .limit(limit)
-      .get();
+  async getUserQuests(userId: string, limitCount: number = 10): Promise<QuestDocument[]> {
+    const q = query(
+      this.getUserSubCollection(userId, COLLECTIONS.QUESTS),
+      orderBy('createdAt', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
 
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -150,15 +167,14 @@ class FirestoreService {
   }
 
   async updateQuest(userId: string, questId: string, updates: Partial<QuestDocument>): Promise<void> {
-    await this.getUserSubCollection(userId, COLLECTIONS.QUESTS)
-      .doc(questId)
-      .update(updates);
+    const questDoc = doc(this.getUserSubCollection(userId, COLLECTIONS.QUESTS), questId);
+    await updateDoc(questDoc, updates);
   }
 
   async completeQuest(userId: string, questId: string): Promise<void> {
     await this.updateQuest(userId, questId, {
       isCompleted: true,
-      completedAt: firestore.Timestamp.now(),
+      completedAt: Timestamp.now(),
     });
   }
 
@@ -172,18 +188,19 @@ class FirestoreService {
       userId,
       questionId,
       response,
-      createdAt: firestore.Timestamp.now(),
+      createdAt: Timestamp.now(),
     };
 
-    await this.getUserSubCollection(userId, COLLECTIONS.PROFILE_RESPONSES)
-      .doc(questionId)
-      .set(responseData);
+    const responseDoc = doc(this.getUserSubCollection(userId, COLLECTIONS.PROFILE_RESPONSES), questionId);
+    await setDoc(responseDoc, responseData);
   }
 
   async getUserProfileResponses(userId: string): Promise<any[]> {
-    const snapshot = await this.getUserSubCollection(userId, COLLECTIONS.PROFILE_RESPONSES)
-      .orderBy('createdAt', 'asc')
-      .get();
+    const q = query(
+      this.getUserSubCollection(userId, COLLECTIONS.PROFILE_RESPONSES),
+      orderBy('createdAt', 'asc')
+    );
+    const snapshot = await getDocs(q);
 
     return snapshot.docs.map(doc => doc.data());
   }

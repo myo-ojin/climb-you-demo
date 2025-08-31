@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppNavigator from './src/navigation/AppNavigator';
 import OnboardingNavigator from './src/navigation/OnboardingNavigator';
 import { firebaseConfig } from './src/services/firebase/config';
+import { hybridStorageService } from './src/services/storage/hybridStorage';
 
 const ONBOARDING_COMPLETED_KEY = 'onboarding_completed';
 
@@ -16,8 +17,10 @@ export default function App() {
 
   const initializeApp = async () => {
     try {
-      // Initialize Firebase
+      // Initialize Firebase and hybrid storage
       await firebaseConfig.initialize();
+      await hybridStorageService.initialize();
+      console.log('🚀 All services initialized successfully');
       
       // Check onboarding status
       await checkOnboardingStatus();

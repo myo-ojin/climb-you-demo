@@ -39,13 +39,18 @@ class AdvancedQuestService {
   initialize(): boolean {
     const config = apiKeyManager.getOpenAIConfig();
     
-    if (!config.apiKey) {
-      console.warn('⚠️  Advanced Quest Service initialization failed: OpenAI API key not available');
+    if (!config.apiKey && !config.useMock) {
+      console.warn('⚠️  Advanced Quest Service initialization failed: OpenAI API key not available and mock mode disabled');
       return false;
     }
 
-    // OpenAI統合（設計書のBasicLLMパターンを使用）
+    // モック機能またはOpenAI統合
     this.llm = new BasicLLM(async ({ system, prompt, temperature }) => {
+      if (config.useMock) {
+        console.log('🎭 Using Mock AI Response');
+        return this.generateMockResponse(prompt);
+      }
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -72,7 +77,7 @@ class AdvancedQuestService {
       return data.choices[0].message.content ?? '';
     });
 
-    console.log('✅ Advanced Quest Service initialized with API key configuration');
+    console.log(`✅ Advanced Quest Service initialized with ${config.useMock ? 'Mock' : 'API'} configuration`);
     return true;
   }
 
@@ -111,6 +116,335 @@ class AdvancedQuestService {
     });
 
     console.log('✅ Advanced Quest Service initialized with manual API key');
+  }
+
+  /**
+   * モックAI応答の生成
+   */
+  private generateMockResponse(prompt: string): string {
+    console.log('🎭 Mock prompt received:', prompt.substring(0, 200));
+    console.log('🎭 Prompt includes skill_map?', prompt.includes('skill_map'));
+    console.log('🎭 Prompt includes スキルマップ?', prompt.includes('スキルマップ'));
+    console.log('🎭 Prompt includes Skill Map?', prompt.includes('Skill Map'));
+    
+    // クエスト生成プロンプトをまず最初にチェック
+    console.log('🎭 Checking quest conditions...');
+    console.log('🎭 Includes 本日のクエスト?', prompt.includes('本日のクエスト'));
+    console.log('🎭 Includes daily_quests?', prompt.includes('daily_quests'));
+    console.log('🎭 Includes クエスト?', prompt.includes('クエスト'));
+    console.log('🎭 Includes 学習プランナー?', prompt.includes('学習プランナー'));
+    
+    if (prompt.includes('本日のクエスト') || 
+        prompt.includes('daily_quests') || 
+        prompt.includes('クエスト') ||
+        prompt.includes('学習プランナー')) {
+      console.log('🎭 Detected QUEST generation prompt');
+      // 日次クエストのモック応答（QuestSchemaに準拠）
+      const mockResponse = JSON.stringify({
+        quests: [
+          {
+            title: "React Nativeコンポーネント基礎学習",
+            pattern: "read_note_q",
+            minutes: 25,
+            difficulty: 0.3,
+            deliverable: "コンポーネント作成サンプルとメモ",
+            steps: [
+              "公式ドキュメントでViewとTextコンポーネントを読む",
+              "要点をメモにまとめる",
+              "理解度確認の3問を自作して解く"
+            ],
+            criteria: [
+              "ViewとTextコンポーネントの基本的な使い方を説明できる",
+              "propsの概念を理解してコードで実装できる"
+            ],
+            tags: ["React Native", "基礎", "コンポーネント"]
+          },
+          {
+            title: "状態管理の実践演習",
+            pattern: "build_micro",
+            minutes: 30,
+            difficulty: 0.5,
+            deliverable: "動作するカウンターアプリ",
+            steps: [
+              "useStateフックを使ったカウンター機能を実装",
+              "ボタンでカウントの増減を制御",
+              "動作確認とコード見直し"
+            ],
+            criteria: [
+              "useStateフックを正しく使用できる",
+              "状態の更新が画面に反映される",
+              "コンポーネントが期待通りに動作する"
+            ],
+            tags: ["React Native", "状態管理", "フック"]
+          },
+          {
+            title: "スタイリング基礎演習",
+            pattern: "flashcards",
+            minutes: 20,
+            difficulty: 0.4,
+            deliverable: "Flexboxレイアウト例とフラッシュカード",
+            steps: [
+              "Flexboxの主要プロパティをフラッシュカードに整理",
+              "簡単なレイアウト例を3パターン作成"
+            ],
+            criteria: [
+              "flexDirection、justifyContent、alignItemsを使い分けられる",
+              "StyleSheetの基本的な書き方を理解している"
+            ],
+            tags: ["React Native", "スタイリング", "Flexbox"]
+          }
+        ],
+        rationale: ["基礎から応用へ段階的に学習", "理論と実践のバランスを重視", "短時間で達成感を得られる構成"]
+      });
+      console.log('🎭 Quest response generated, length:', mockResponse.length);
+      return mockResponse;
+      
+    } else if (prompt.includes('審査し') || 
+               prompt.includes('制約違反') ||
+               prompt.includes('QUESTS_CANDIDATE') ||
+               prompt.includes('修正案') ||
+               prompt.includes('policy') ||
+               prompt.includes('ポリシー')) {
+      console.log('🎭 Detected POLICY CHECK prompt');
+      // ポリシーチェックのモック応答（入力クエストをそのまま返す）
+      const mockResponse = JSON.stringify({
+        quests: [
+          {
+            title: "React Nativeコンポーネント基礎学習",
+            pattern: "read_note_q",
+            minutes: 25,
+            difficulty: 0.3,
+            deliverable: "コンポーネント作成サンプルとメモ",
+            steps: [
+              "公式ドキュメントでViewとTextコンポーネントを読む",
+              "要点をメモにまとめる",
+              "理解度確認の3問を自作して解く"
+            ],
+            criteria: [
+              "ViewとTextコンポーネントの基本的な使い方を説明できる",
+              "propsの概念を理解してコードで実装できる"
+            ],
+            tags: ["React Native", "基礎", "コンポーネント"]
+          },
+          {
+            title: "状態管理の実践演習",
+            pattern: "build_micro",
+            minutes: 30,
+            difficulty: 0.5,
+            deliverable: "動作するカウンターアプリ",
+            steps: [
+              "useStateフックを使ったカウンター機能を実装",
+              "ボタンでカウントの増減を制御",
+              "動作確認とコード見直し"
+            ],
+            criteria: [
+              "useStateフックを正しく使用できる",
+              "状態の更新が画面に反映される",
+              "コンポーネントが期待通りに動作する"
+            ],
+            tags: ["React Native", "状態管理", "フック"]
+          },
+          {
+            title: "スタイリング基礎演習（最適化後）",
+            pattern: "flashcards",
+            minutes: 20,
+            difficulty: 0.4,
+            deliverable: "Flexboxレイアウト例とフラッシュカード",
+            steps: [
+              "Flexboxの主要プロパティをフラッシュカードに整理",
+              "簡単なレイアウト例を3パターン作成"
+            ],
+            criteria: [
+              "flexDirection、justifyContent、alignItemsを使い分けられる",
+              "StyleSheetの基本的な書き方を理解している"
+            ],
+            tags: ["React Native", "スタイリング", "Flexbox"]
+          }
+        ],
+        rationale: ["制約チェック完了", "パターン重複なし", "時間配分最適化済み"]
+      });
+      console.log('🎭 Policy check response generated, length:', mockResponse.length);
+      return mockResponse;
+      
+    } else if (prompt.includes('skill_map') || 
+               prompt.includes('スキルマップ') || 
+               prompt.includes('Skill Map') ||
+               prompt.includes('カリキュラム設計者')) {
+      console.log('🎭 Detected SKILL MAP generation prompt');
+      // スキルマップのモック応答（SkillAtomSchemaに準拠）
+      const mockResponse = JSON.stringify({
+        skill_atoms: [
+          {
+            id: "react-native-basics",
+            label: "React Native基礎",
+            type: "concept",
+            level: "intro",
+            bloom: "understand",
+            prereq: [],
+            representative_tasks: [
+              "JSXの基本文法を理解する",
+              "コンポーネントとPropsの概念を説明する",
+              "基本的なViewとTextを使ったUIを作成する"
+            ],
+            suggested_patterns: ["read_note_q", "flashcards"]
+          },
+          {
+            id: "component-design",
+            label: "コンポーネント設計",
+            type: "procedure",
+            level: "basic",
+            bloom: "apply",
+            prereq: ["react-native-basics"],
+            representative_tasks: [
+              "再利用可能なボタンコンポーネントを作成する",
+              "Props設計でコンポーネントをカスタマイズする",
+              "StyleSheetを使った適切なスタイリングを行う"
+            ],
+            suggested_patterns: ["build_micro", "config_verify"]
+          },
+          {
+            id: "state-management",
+            label: "状態管理",
+            type: "concept",
+            level: "intermediate",
+            bloom: "analyze",
+            prereq: ["react-native-basics"],
+            representative_tasks: [
+              "useStateフックで状態を管理する",
+              "Context APIを使ったグローバル状態管理を実装する",
+              "状態更新のパフォーマンスを最適化する"
+            ],
+            suggested_patterns: ["build_micro", "debug_explain"]
+          },
+          {
+            id: "navigation-system",
+            label: "ナビゲーションシステム",
+            type: "procedure",
+            level: "basic",
+            bloom: "apply",
+            prereq: ["component-design"],
+            representative_tasks: [
+              "Stack Navigatorで画面遷移を実装する",
+              "Tab Navigatorでタブベースのナビゲーションを作成する",
+              "パラメータを使った画面間のデータ受け渡しを行う"
+            ],
+            suggested_patterns: ["config_verify", "build_micro"]
+          },
+          {
+            id: "api-integration",
+            label: "API統合",
+            type: "procedure",
+            level: "intermediate",
+            bloom: "create",
+            prereq: ["state-management"],
+            representative_tasks: [
+              "fetchを使ったREST API呼び出しを実装する",
+              "非同期データフェッチのローディング状態を管理する",
+              "APIエラーハンドリングとユーザーフィードバックを実装する"
+            ],
+            suggested_patterns: ["debug_explain", "feynman"]
+          },
+          {
+            id: "testing-basics",
+            label: "テスト基礎",
+            type: "procedure",
+            level: "intermediate",
+            bloom: "apply",
+            prereq: ["component-design"],
+            representative_tasks: [
+              "Jest/React Native Testing Libraryの基本を学ぶ",
+              "単体テストとスナップショットテストを作成する",
+              "コンポーネントテストを実装する"
+            ],
+            suggested_patterns: ["read_note_q", "config_verify"]
+          },
+          {
+            id: "performance-optimization",
+            label: "パフォーマンス最適化",
+            type: "concept",
+            level: "advanced",
+            bloom: "evaluate",
+            prereq: ["state-management", "api-integration"],
+            representative_tasks: [
+              "React.memoとuseMemoでレンダリング最適化を行う",
+              "FlatListの最適化テクニックを実装する",
+              "メモリリーク対策と監視を行う"
+            ],
+            suggested_patterns: ["debug_explain", "past_paper"]
+          },
+          {
+            id: "deployment",
+            label: "デプロイメント",
+            type: "procedure",
+            level: "advanced",
+            bloom: "create",
+            prereq: ["testing-basics"],
+            representative_tasks: [
+              "Expo EASでビルドとデプロイを行う",
+              "App StoreとGoogle Play Storeにアプリを公開する",
+              "CI/CDパイプラインを構築する"
+            ],
+            suggested_patterns: ["config_verify", "build_micro"]
+          },
+          {
+            id: "advanced-patterns",
+            label: "上級パターン",
+            type: "concept",
+            level: "advanced",
+            bloom: "create",
+            prereq: ["performance-optimization"],
+            representative_tasks: [
+              "カスタムフックとHOCパターンを実装する",
+              "Context APIとReducerの組み合わせを活用する",
+              "ファイル構造とアーキテクチャパターンを設計する"
+            ],
+            suggested_patterns: ["feynman", "socratic"]
+          },
+          {
+            id: "native-integration",
+            label: "ネイティブ統合",
+            type: "procedure",
+            level: "advanced",
+            bloom: "create",
+            prereq: ["deployment"],
+            representative_tasks: [
+              "ネイティブモジュールとカスタムコンポーネントを作成する",
+              "プラットフォーム固有の機能を実装する",
+              "サードパーティライブラリの統合を行う"
+            ],
+            suggested_patterns: ["build_micro", "retrospective"]
+          }
+        ]
+      });
+      console.log('🎭 Mock skill_atoms response length:', mockResponse.length);
+      console.log('🎭 Mock skill_atoms response start:', mockResponse.substring(0, 100));
+      console.log('🎭 Mock skill_atoms response end:', mockResponse.substring(mockResponse.length - 100));
+      
+      // JSONパース確認
+      try {
+        const parsed = JSON.parse(mockResponse);
+        console.log('🎭 Parsed skill_atoms count:', parsed.skill_atoms?.length);
+      } catch (parseError) {
+        console.error('🎭 JSON Parse Error:', parseError);
+      }
+      
+      return mockResponse;
+    }
+    
+    // デフォルトのモック応答
+    return JSON.stringify({
+      quests: [
+        {
+          title: "モック学習クエスト",
+          pattern: "read_note_q",
+          minutes: 20,
+          difficulty: 0.5,
+          deliverable: "学習ノート",
+          criteria: ["基本概念を理解できる"],
+          tags: ["テスト", "モック"]
+        }
+      ]
+    });
   }
 
   /**

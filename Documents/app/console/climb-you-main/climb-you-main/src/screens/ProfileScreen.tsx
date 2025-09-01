@@ -3,9 +3,7 @@ import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView, SafeAreaVi
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { firebaseConfig } from '../services/firebase/config';
 import { hybridStorageService } from '../services/storage/hybridStorage';
-import { openaiService } from '../services/ai/openaiService';
 import { advancedQuestService, ProfileV1 } from '../services/ai/advancedQuestService';
-import { secureAPIKeyManager, APIKeyMetadata } from '../services/security/secureAPIKeyManager';
 import { aiInitializationService, AIInitializationResult } from '../services/ai/aiInitializationService';
 import { apiKeyManager } from '../config/apiKeys';
 
@@ -15,13 +13,11 @@ export default function ProfileScreen() {
   const [connectionStatus, setConnectionStatus] = useState<string>('未接続');
   const [syncStatus, setSyncStatus] = useState<string>('不明');
   const [testResults, setTestResults] = useState<string[]>([]);
-  const [securityStatus, setSecurityStatus] = useState<string>('未確認');
   const [aiStatus, setAiStatus] = useState<string>('未確認');
   const [initializationResult, setInitializationResult] = useState<AIInitializationResult | null>(null);
 
   useEffect(() => {
     checkServices();
-    checkSecurityStatus();
     checkAIStatus();
   }, []);
 
@@ -50,25 +46,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const checkSecurityStatus = async () => {
-    try {
-      const diagnosis = await secureAPIKeyManager.diagnoseSecurityStatus();
-      const statusParts = [];
-      
-      if (diagnosis.secureStoreAvailable) statusParts.push('SecureStore✅');
-      else statusParts.push('SecureStore❌');
-      
-      if (diagnosis.encryptionWorking) statusParts.push('暗号化✅');
-      else statusParts.push('暗号化❌');
-      
-      if (diagnosis.deviceKeyExists) statusParts.push('デバイスキー✅');
-      else statusParts.push('デバイスキー❌');
-      
-      setSecurityStatus(statusParts.join(' '));
-    } catch (error) {
-      setSecurityStatus('エラー');
-    }
-  };
 
   const checkAIStatus = async () => {
     try {
@@ -186,6 +163,105 @@ export default function ProfileScreen() {
     );
   };
 
+  const testMockSkillMap = async () => {
+    setIsLoading(true);
+    const results: string[] = [];
+    
+    try {
+      results.push('🧪 モックスキルマップ個別テスト開始');
+      
+      // Advanced Quest Service初期化確認
+      const initialized = advancedQuestService.isInitialized();
+      results.push(`✅ サービス初期化: ${initialized ? 'OK' : 'NG'}`);
+      
+      if (!initialized) {
+        const success = advancedQuestService.initialize();
+        results.push(`🔄 初期化実行: ${success ? '成功' : '失敗'}`);
+      }
+      
+      // スキルマップ生成テスト
+      results.push('🎯 スキルマップ生成テスト...');
+      const skillAtoms = await advancedQuestService.generateSkillMap({
+        goalText: 'React Nativeテスト目標',
+        currentLevelTags: ['初心者'],
+        priorityAreas: ['基礎']
+      });
+      
+      results.push(`✅ スキルマップ生成成功: ${skillAtoms.length}項目`);
+      skillAtoms.slice(0, 3).forEach((atom, i) => {
+        results.push(`  ${i+1}. ${atom.label} (${atom.type})`);
+      });
+      
+      setTestResults(results);
+      Alert.alert('スキルマップテスト', '成功！詳細はログを確認してください。');
+      
+    } catch (error) {
+      results.push(`❌ エラー: ${error.message}`);
+      if (error.name === 'ZodError') {
+        results.push(`🐛 Zodエラー詳細: ${JSON.stringify(error.errors, null, 2)}`);
+      }
+      setTestResults(results);
+      Alert.alert('エラー', `スキルマップテスト失敗: ${error.message}`);
+    }
+    
+    setIsLoading(false);
+  };
+
+  const testMockQuests = async () => {
+    setIsLoading(true);
+    const results: string[] = [];
+    
+    try {
+      results.push('🎲 モッククエスト個別テスト開始');
+      
+      // サンプルプロファイル作成
+      const profile = advancedQuestService.createBasicProfile({
+        goalText: 'テスト目標',
+        timeBudgetMin: 30,
+        motivation: 'high'
+      });
+      
+      // サンプルスキルアトム
+      const sampleSkillAtoms = [
+        {
+          id: 'test-skill',
+          label: 'テストスキル',
+          type: 'concept' as const,
+          level: 'intro' as const,
+          bloom: 'understand' as const,
+          prereq: [],
+          representative_tasks: ['テストタスク'],
+          suggested_patterns: ['read_note_q' as const]
+        }
+      ];
+      
+      // クエスト生成テスト
+      results.push('🎯 クエスト生成テスト...');
+      const quests = await advancedQuestService.generateDailyQuests({
+        profile,
+        skillAtoms: sampleSkillAtoms
+      });
+      
+      results.push(`✅ クエスト生成成功: ${quests.length}個`);
+      quests.slice(0, 2).forEach((quest, i) => {
+        results.push(`  ${i+1}. ${quest.title} (${quest.minutes}分)`);
+      });
+      
+      setTestResults(results);
+      Alert.alert('クエストテスト', '成功！詳細はログを確認してください。');
+      
+    } catch (error) {
+      results.push(`❌ エラー: ${error.message}`);
+      if (error.name === 'ZodError') {
+        results.push(`🐛 Zodエラー詳細: ${JSON.stringify(error.errors, null, 2)}`);
+      }
+      setTestResults(results);
+      Alert.alert('エラー', `クエストテスト失敗: ${error.message}`);
+    }
+    
+    setIsLoading(false);
+  };
+
   const testAdvancedQuestsDemo = async () => {
     setIsLoading(true);
     const results: string[] = [];
@@ -206,22 +282,87 @@ export default function ProfileScreen() {
       results.push(`🔥 モチベーション: ${demoProfile.goal_motivation}`);
       results.push(`⏱️ セッション長: ${demoProfile.preferred_session_length_min}分`);
       
-      // 実際のAPIキーがある場合のみクエスト生成をテスト
-      results.push('');
-      results.push('📋 設計書の機能:');
-      results.push('• スキルマップ自動生成 (12-18項目)');
-      results.push('• パターンベース学習 (10種類)');
-      results.push('• 制約考慮クエスト生成 (時間・環境)');
-      results.push('• ポリシーチェック & 品質保証');
-      results.push('• 日本語ネイティブ対応');
-      
-      results.push('');
-      results.push('🚀 APIキー設定後に利用可能:');
-      results.push('• advancedQuestService.initialize("YOUR_KEY")');
-      results.push('• generateOptimizedQuests() で完全パイプライン');
+      // 実際のAPIキー確認と本格テスト実行
+      const initialized = advancedQuestService.isInitialized();
+      if (initialized) {
+        results.push('');
+        results.push('🚀 実際のクエスト生成テスト実行中...');
+        
+        try {
+          // 実際のOpenAI API呼び出しテスト
+          const questResult = await advancedQuestService.generateOptimizedQuests({
+            goalText: demoProfile.long_term_goal,
+            profile: demoProfile,
+            currentLevelTags: ['React Native初心者', 'JavaScript基礎'],
+            priorityAreas: ['コンポーネント設計', '状態管理'],
+            checkins: {
+              mood_energy: 'high',
+              available_time_today_delta_min: 0,
+              focus_noise: 'low'
+            }
+          });
+          
+          results.push(`✅ スキルマップ生成: ${questResult.skillAtoms.length}項目`);
+          results.push(`✅ 候補クエスト: ${questResult.questsCandidate.length}個`);
+          results.push(`✅ 最適化クエスト: ${questResult.finalQuests.quests.length}個`);
+          
+          // Firebaseに保存テスト
+          results.push('');
+          results.push('💾 Firebase保存テスト...');
+          
+          // Goal作成
+          const goalId = await hybridStorageService.createGoal({
+            title: demoProfile.long_term_goal,
+            description: 'AI生成による学習目標',
+            category: 'プログラミング',
+            timeframe: '3ヶ月',
+            intensity: 'high'
+          });
+          results.push(`✅ Goal保存: ${goalId}`);
+          
+          // Quest保存
+          for (let i = 0; i < Math.min(3, questResult.finalQuests.quests.length); i++) {
+            const quest = questResult.finalQuests.quests[i];
+            const questId = await hybridStorageService.createQuest({
+              goalId,
+              title: quest.title,
+              description: quest.description || `${quest.learning_pattern}による学習クエスト`,
+              estimatedMinutes: quest.minutes,
+              difficulty: 'medium',
+              pattern: quest.learning_pattern
+            });
+            results.push(`✅ Quest保存 ${i+1}: ${questId.substring(0, 8)}...`);
+          }
+          
+          results.push('');
+          results.push('🎉 完全テスト成功！OpenAI→Firebase連携OK');
+          
+        } catch (apiError) {
+          results.push(`❌ API呼び出しエラー: ${apiError.message}`);
+          results.push('');
+          results.push('📋 設計書の機能（API待機中）:');
+          results.push('• スキルマップ自動生成 (12-18項目)');
+          results.push('• パターンベース学習 (10種類)');
+          results.push('• 制約考慮クエスト生成 (時間・環境)');
+          results.push('• ポリシーチェック & 品質保証');
+        }
+      } else {
+        results.push('');
+        results.push('⚠️  APIキー未設定 - デモモードのみ');
+        results.push('📋 設計書の機能:');
+        results.push('• スキルマップ自動生成 (12-18項目)');
+        results.push('• パターンベース学習 (10種類)');
+        results.push('• 制約考慮クエスト生成 (時間・環境)');
+        results.push('• ポリシーチェック & 品質保証');
+      }
 
       setTestResults(results);
-      Alert.alert('Advanced Quest Service', 'デモ完了！設計書の高品質プロンプトが統合されています。');
+      
+      if (initialized) {
+        Alert.alert('Advanced Quest Service', '本格テスト完了！OpenAI API→Firebase連携をテストしました。');
+      } else {
+        Alert.alert('Advanced Quest Service', 'デモ完了！APIキー設定後に実際の生成が可能です。');
+      }
       
     } catch (error) {
       results.push(`❌ エラー: ${error.message}`);
@@ -231,41 +372,6 @@ export default function ProfileScreen() {
     setIsLoading(false);
   };
 
-  const testOpenAI = async () => {
-    Alert.alert(
-      'OpenAI APIテスト',
-      'OpenAI APIキーが設定されていればプロファイル質問を生成できます。',
-      [
-        {
-          text: 'APIキー設定方法を見る',
-          onPress: () => {
-            Alert.alert(
-              'OpenAI API設定',
-              'src/services/ai/openaiService.ts ファイルで\nopenaiService.initialize("YOUR_API_KEY")\nを呼び出してください。'
-            );
-          }
-        },
-        {
-          text: 'テスト実行',
-          onPress: async () => {
-            try {
-              setIsLoading(true);
-              // 実際のAPIキーが必要
-              const questions = await openaiService.generateProfileQuestions(['プログラミング学習']);
-              Alert.alert('成功', `${questions.length}個の質問を生成しました！`);
-            } catch (error) {
-              Alert.alert('エラー', `OpenAI API: ${error.message}`);
-            }
-            setIsLoading(false);
-          }
-        },
-        {
-          text: 'キャンセル',
-          style: 'cancel'
-        }
-      ]
-    );
-  };
 
   const restartOnboarding = async () => {
     Alert.alert(
@@ -304,111 +410,6 @@ export default function ProfileScreen() {
     );
   };
 
-  const testSecureAPIKeyManager = async () => {
-    Alert.alert(
-      '🔐 セキュアAPIキー管理テスト',
-      'APIキーの暗号化保存・取得機能をテストします',
-      [
-        {
-          text: '診断のみ',
-          onPress: async () => {
-            setIsLoading(true);
-            const results: string[] = [];
-            
-            try {
-              results.push('🔍 セキュリティ診断開始...');
-              
-              const diagnosis = await secureAPIKeyManager.diagnoseSecurityStatus();
-              results.push(`🏪 SecureStore: ${diagnosis.secureStoreAvailable ? '利用可能' : '利用不可'}`);
-              results.push(`🔒 暗号化機能: ${diagnosis.encryptionWorking ? '動作中' : '失敗'}`);
-              results.push(`🔑 デバイスキー: ${diagnosis.deviceKeyExists ? '生成済み' : '未生成'}`);
-              
-              const storedKeys = await secureAPIKeyManager.listStoredKeys();
-              results.push(`💾 保存済みキー: ${storedKeys.length}個`);
-              
-              if (storedKeys.length > 0) {
-                for (const provider of storedKeys) {
-                  const metadata = await secureAPIKeyManager.getAPIKeyMetadata(provider);
-                  if (metadata) {
-                    results.push(`  • ${provider}: ${metadata.masked} (${new Date(metadata.encryptedAt).toLocaleString()})`);
-                  }
-                }
-              }
-              
-              results.push('');
-              results.push('🛡️ セキュリティ機能:');
-              results.push('• AES-256-GCM暗号化');
-              results.push('• デバイス固有キー派生');
-              results.push('• iOS Keychain / Android Keystore');
-              results.push('• メモリ保護とセキュアクリア');
-              
-              setTestResults(results);
-              await checkSecurityStatus();
-              
-            } catch (error) {
-              results.push(`❌ 診断エラー: ${error.message}`);
-              setTestResults(results);
-            }
-            
-            setIsLoading(false);
-          }
-        },
-        {
-          text: '完全テスト',
-          onPress: async () => {
-            Alert.alert(
-              '完全テスト実行',
-              'テスト用APIキーで暗号化・復号化をテストしますか？',
-              [
-                {
-                  text: '実行',
-                  onPress: async () => {
-                    setIsLoading(true);
-                    const results: string[] = [];
-                    
-                    try {
-                      results.push('🧪 完全テスト開始...');
-                      
-                      const testKey = 'sk-test1234567890abcdef1234567890abcdef1234567890';
-                      
-                      // テスト用キー保存
-                      await secureAPIKeyManager.storeAPIKey('test', testKey);
-                      results.push('✅ テストキー暗号化保存成功');
-                      
-                      // メタデータ取得テスト
-                      const metadata = await secureAPIKeyManager.getAPIKeyMetadata('test');
-                      if (metadata) {
-                        results.push(`📋 メタデータ取得成功: ${metadata.masked}`);
-                      }
-                      
-                      // キー取得テスト（注意：現在は簡易実装）
-                      const retrievedKey = await secureAPIKeyManager.getAPIKey('test');
-                      results.push('⚠️  復号化は簡易実装（本番では適切な暗号化ライブラリを使用）');
-                      
-                      // クリーンアップ
-                      await secureAPIKeyManager.deleteAPIKey('test');
-                      results.push('🧹 テストキー削除完了');
-                      
-                      results.push('');
-                      results.push('✅ 全テスト完了！');
-                      
-                    } catch (error) {
-                      results.push(`❌ テストエラー: ${error.message}`);
-                    }
-                    
-                    setTestResults(results);
-                    setIsLoading(false);
-                  }
-                },
-                { text: 'キャンセル', style: 'cancel' }
-              ]
-            );
-          }
-        },
-        { text: 'キャンセル', style: 'cancel' }
-      ]
-    );
-  };
 
   const testAIInitialization = async () => {
     setIsLoading(true);
@@ -502,7 +503,6 @@ export default function ProfileScreen() {
           <Text style={styles.statusTitle}>現在のステータス</Text>
           <Text style={styles.statusText}>🔐 認証: {connectionStatus}</Text>
           <Text style={styles.statusText}>🔄 同期: {syncStatus}</Text>
-          <Text style={styles.statusText}>🛡️ セキュリティ: {securityStatus}</Text>
           <Text style={styles.statusText}>🤖 AI: {aiStatus}</Text>
           {userId && (
             <Text style={styles.statusText}>👤 ユーザーID: {userId.substring(0, 8)}...</Text>
@@ -532,28 +532,28 @@ export default function ProfileScreen() {
 
           <TouchableOpacity 
             style={[styles.button, styles.secondaryButton]}
+            onPress={testMockSkillMap}
+          >
+            <Text style={[styles.buttonText, styles.secondaryButtonText]}>
+              🧪 モックスキルマップテスト
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.button, styles.secondaryButton]}
+            onPress={testMockQuests}
+          >
+            <Text style={[styles.buttonText, styles.secondaryButtonText]}>
+              🎲 モッククエストテスト
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.button, styles.secondaryButton]}
             onPress={testAdvancedQuests}
           >
             <Text style={[styles.buttonText, styles.secondaryButtonText]}>
-              🎯 Advanced Quest Generation
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.button, styles.secondaryButton]}
-            onPress={testSecureAPIKeyManager}
-          >
-            <Text style={[styles.buttonText, styles.secondaryButtonText]}>
-              🔐 セキュアAPIキー管理テスト
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.button, styles.secondaryButton]}
-            onPress={testOpenAI}
-          >
-            <Text style={[styles.buttonText, styles.secondaryButtonText]}>
-              🤖 OpenAI APIテスト
+              🎯 フル統合テスト
             </Text>
           </TouchableOpacity>
 

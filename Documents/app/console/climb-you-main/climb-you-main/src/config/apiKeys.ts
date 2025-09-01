@@ -18,6 +18,7 @@ const API_CONFIG = {
   // フォールバック設定
   ENABLE_AI_FEATURES: process.env.EXPO_PUBLIC_ENABLE_AI_FEATURES === 'true',
   DEBUG_API_CALLS: process.env.EXPO_PUBLIC_DEBUG_API_CALLS === 'true',
+  USE_MOCK_AI: process.env.EXPO_PUBLIC_USE_MOCK_AI === 'true',
 };
 
 class APIKeyManager {
@@ -61,6 +62,7 @@ class APIKeyManager {
       model: API_CONFIG.OPENAI_MODEL,
       temperature: API_CONFIG.OPENAI_TEMPERATURE,
       maxTokens: API_CONFIG.OPENAI_MAX_TOKENS,
+      useMock: API_CONFIG.USE_MOCK_AI,
     };
   }
 

@@ -1,8 +1,27 @@
 @import "tailwindcss";
 
 :root {
+  /* Base UI tokens */
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Night scene tokens (SVG uses these) */
+  --night-sky-top: #0b2238;      /* deep navy (slightly brighter) */
+  --night-sky-bottom: #081b2f;   /* darker navy */
+  --night-haze-top: rgba(12, 28, 48, 0);
+  --night-haze-bottom: rgba(12, 28, 48, 0.55);
+  --night-moon: #ffdf8a;         /* warm moonlight */
+  --night-star: #d9ecff;
+  --night-ridge-far: #1e3a56;
+  --night-ridge-mid: #274a69;
+  --night-ridge-near: #305a76;
+  --night-ridge-front-lower: #0f2436; /* darkest, near foreground */
+  --night-ridge-front-upper: #17344a;
+  --night-ridge-peak: #2b5a7a;
+  --night-ridge-rock: #0c1e2e;
+  --night-path-base: rgba(228, 240, 255, 0.22);
+  --night-path-highlight: #f7fbff;
+  --night-path-shadow: rgba(8, 23, 41, 0.35);
 }
 
 @theme inline {
